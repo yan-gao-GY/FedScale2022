@@ -45,6 +45,8 @@ def process_cmd(yaml_file, local=False):
     ps_ip = yaml_conf['ps_ip']
     worker_ips, total_gpus = [], []
     cmd_script_list = []
+    cuda_ids = yaml_conf['cuda_ids']
+    ps_cuda_id = yaml_conf['ps_cuda_id']
 
     executor_configs = "=".join(yaml_conf['worker_ips'])
     for ip_gpu in yaml_conf['worker_ips']:
@@ -105,7 +107,7 @@ def process_cmd(yaml_file, local=False):
         ps_cmd = f" docker run -i --name {ps_name} --network {yaml_conf['container_network']} -p {ports[0]}:30000 --mount type=bind,source={yaml_conf['data_path']},target=/FedScale/benchmark fedscale/fedscale-aggr"
     else:
         print(f"Starting aggregator on {ps_ip}...")
-        ps_cmd = f" python {yaml_conf['exp_path']}/{yaml_conf['aggregator_entry']} {conf_script} --this_rank=0 --num_executors={total_gpu_processes} --executor_configs={executor_configs} "
+        ps_cmd = f" python {yaml_conf['exp_path']}/{yaml_conf['aggregator_entry']} {conf_script} --this_rank=0 --num_executors={total_gpu_processes} --executor_configs={executor_configs} --cuda_device=cuda:{ps_cuda_id} "
 
     with open(f"{job_name}_logging", 'wb') as fout:
         pass
@@ -120,6 +122,7 @@ def process_cmd(yaml_file, local=False):
     time.sleep(10)
     # =========== Submit job to each worker ============
     rank_id = 1
+    node_num = 0
     for worker, gpu in zip(worker_ips, total_gpus):
         running_vms.add(worker)
 
@@ -141,7 +144,7 @@ def process_cmd(yaml_file, local=False):
                     
                     worker_cmd = f" docker run -i --name fedscale-exec{rank_id}-{time_stamp} --network {yaml_conf['container_network']} -p {ports[rank_id]}:32000 --mount type=bind,source={yaml_conf['data_path']},target=/FedScale/benchmark fedscale/fedscale-exec"
                 else:
-                    worker_cmd = f" python {yaml_conf['exp_path']}/{yaml_conf['executor_entry']} {conf_script} --this_rank={rank_id} --num_executors={total_gpu_processes} --cuda_device=cuda:{cuda_id} "
+                    worker_cmd = f" python {yaml_conf['exp_path']}/{yaml_conf['executor_entry']} {conf_script} --this_rank={rank_id} --num_executors={total_gpu_processes} --cuda_device=cuda:{cuda_ids[node_num][cuda_id]} "
                 rank_id += 1
 
                 with open(f"{job_name}_logging", 'a') as fout:
@@ -152,6 +155,7 @@ def process_cmd(yaml_file, local=False):
                     else:
                         subprocess.Popen(f'ssh {submit_user}{worker} "{setup_cmd} {worker_cmd}"',
                                          shell=True, stdout=fout, stderr=fout)
+        node_num += 1
 
     # dump the address of running workers
     current_path = os.path.dirname(os.path.abspath(__file__))
