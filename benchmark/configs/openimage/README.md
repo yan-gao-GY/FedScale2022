@@ -18,14 +18,14 @@ screen -S <name_of_the_window>
 In order to submit the FedScale job, following the FedScale tutorial, we should use:
 
 ```bash
-python /abs/path/to/docker/driver.py submit /abs/path/to/benchmark/configs/openimage/conf.yml # non-local
-python /abs/path/to/docker/driver.py start /abs/path/to/benchmark/configs/openimage/conf.yml # local
+python </abs/path/to>/docker/driver.py submit </abs/path/to>/benchmark/configs/openimage/conf.yml # non-local
+python </abs/path/to>/docker/driver.py start </abs/path/to>/benchmark/configs/openimage/conf.yml # local
 ```
 
 For stopping the job:
 
 ```bash
-python /abs/path/to/docker/driver.py stop [job_name] # (specified in the yml config)
+python </abs/path/to>/docker/driver.py stop [job_name] # (specified in the yml config)
 ```
 
 Remember that when stopping the job, `driver.py` is using `ssh`, don't know why.
@@ -34,8 +34,19 @@ We can find the job logging `job_name` under the path `log_path` specified in th
 To check the training loss or test accuracy, we can do:
 
 ```bash
-cat job_name_logging |grep 'Training loss'
-cat job_name_logging |grep 'FL Testing'
+cat <job_name>_logging |grep 'Training loss'
+cat <job_name>_logging |grep 'FL Testing'
 ```
 
 Apparently FedScale doesn't like the experiment with only 1 round!!
+
+## Measuring the GPU statistics
+
+For measuring the GPU statistics we need to use the `nvidia-smi` utility because of its speed, other python packages are not as fast as `nvidia-smi`.
+The command we need is the following:
+
+```bash
+nvidia-smi --query-gpu=timestamp,name,index,pci.bus_id,utilization.gpu,utilization.memory,memory.total,memory.free,memory.used --format=csv --filename=</output/file/path.csv> --loop-ms=<period-of-monitoring>
+
+I think we need to lauch this monitor just before the parameter server, just by adding one line of code to `driver.py`.
+We can also modify `shutdown.py` in order to include `nvidia-smi` in the list of processes to shut down.
