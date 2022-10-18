@@ -20,13 +20,18 @@ In order to submit the FedScale job, following the FedScale tutorial, we should 
 
 ```bash
 python </abs/path/to>/docker/driver.py submit </abs/path/to>/benchmark/configs/openimage/conf.yml # non-local
+python $FEDSCALE_HOME/docker/driver.py submit $FEDSCALE_HOME/benchmark/configs/openimage/conf.yml
 python </abs/path/to>/docker/driver.py start </abs/path/to>/benchmark/configs/openimage/conf.yml # local
+python $FEDSCALE_HOME/docker/driver.py start $FEDSCALE_HOME/benchmark/configs/openimage/conf.yml
 ```
 
 For stopping the job:
 
 ```bash
-python </abs/path/to>/docker/driver.py stop [job_name] # (specified in the yml config)
+python </abs/path/to>/docker/driver.py stop [job_name] [monitor]# (specified in the yml config)
+python $FEDSCALE_HOME/docker/driver.py stop openimage monitor
+python </abs/path/to>/docker/driver.py lstop [job_name] [monitor]# (specified in the yml config)
+python $FEDSCALE_HOME/docker/driver.py lstop openimage monitor
 ```
 
 Remember that when stopping the job, `driver.py` is using `ssh`, don't know why.
@@ -37,6 +42,7 @@ To check the training loss or test accuracy, we can do:
 ```bash
 cat <job_name>_logging |grep 'Training loss'
 cat <job_name>_logging |grep 'FL Testing'
+tail -f $FEDSCALE_HOME/openimage_logging
 ```
 
 Apparently FedScale doesn't like the experiment with only 1 round!!
