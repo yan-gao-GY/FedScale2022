@@ -2,8 +2,8 @@
 
 # ========== Cluster configuration ========== 
 # ip address of the parameter server (need 1 GPU process)
-ps_ip: 127.0.0.1 # localhost
-# ps_ip: 128.232.115.65  # tarawera
+# ps_ip: 127.0.0.1 # localhost
+ps_ip: 128.232.115.65  # tarawera
 # ps_ip: 128.232.115.66 # ngongotaha
 # ps_ip: 128.232.115.0  # mauao
 
@@ -11,12 +11,15 @@ ps_ip: 127.0.0.1 # localhost
 # Note that if we collocate ps and worker on same GPU, then we need to decrease this number of available processes on that GPU by 1
 # E.g., master node has 4 available processes, then 1 for the ps, and worker should be set to: worker:3
 worker_ips: 
-    - 127.0.0.1:[1] # worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    # - 127.0.0.1:[2] # worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    - 128.232.115.65:[12] # worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
 
 # This will set the `cuda_id` for the workers
-cuda_ids: [[0]]
+w_use_cuda: True
+cuda_ids: [[1,2,3,4,5,6,7,1,2,3,4,5,6,7]]
 # cuda_ids: [[0],[0]]
 # This will set the `cuda_id` for the parameter server
+ps_use_cuda: True
 ps_cuda_id: 0
 
 exp_path: $FEDSCALE_HOME/fedscale/core
@@ -29,19 +32,20 @@ aggregator_entry: aggregation/aggregator.py
 # This is useless in local simulation, it's used only when `driver.py` il launched from a different node w.r.t. `ps_ip` and `worker_ips`  
 auth:
     ssh_user: "ls985"
-    ssh_private_key: ~/.ssh/id_ed25519 
+    # ssh_private_key: ~/.ssh/id_ed25519 
 
 # This configure whether to monitor or not GPU usage: flag must be (yes/no), the period is given in milliseconds, the log path must be a valid path
 monitor:
     flag: "yes"
-    period: 100
+    period: 1
     log_path: $FEDSCALE_HOME/benchmark/logs/monitor
 
 
 # cmd to run before we can indeed run FAR (in order), these commands are called for every subprocess launched by `driver.py` but only in non-local mode (i.e. when using `ssh`)
 setup_commands:
+    # - export FEDSCALE_HOME='/nfs-share/ls985/FedScale2022'
     - source /nfs-share/ls985/anaconda3/bin/activate fedscale
-    - export NCCL_SOCKET_IFNAME='enp94s0f0'         # Run "ifconfig" to ensure the right NIC for nccl if you have multiple NICs
+    # - export NCCL_SOCKET_IFNAME='enp94s0f0'         # Run "ifconfig" to ensure the right NIC for nccl if you have multiple NICs
 
 # ========== Additional job configuration ========== 
 # Default parameters are specified in config_parser.py, wherein more description of the parameter can be found
