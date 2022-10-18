@@ -31,7 +31,7 @@ auth:
     ssh_user: "ls985"
     ssh_private_key: ~/.ssh/id_ed25519 
 
-# cmd to run before we can indeed run FAR (in order)
+# cmd to run before we can indeed run FAR (in order), these commands are called for every subprocess launched by `driver.py` but only in non-local mode (i.e. when using `ssh`)
 setup_commands:
     - source /nfs-share/ls985/anaconda3/bin/activate fedscale
     - export NCCL_SOCKET_IFNAME='enp94s0f0'         # Run "ifconfig" to ensure the right NIC for nccl if you have multiple NICs

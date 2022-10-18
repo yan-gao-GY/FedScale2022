@@ -28,6 +28,8 @@ For stopping the job:
 python /abs/path/to/docker/driver.py stop [job_name] # (specified in the yml config)
 ```
 
+Remember that when stopping the job, `driver.py` is using `ssh`, don't know why.
+
 We can find the job logging `job_name` under the path `log_path` specified in the configuration file.
 To check the training loss or test accuracy, we can do:
 
