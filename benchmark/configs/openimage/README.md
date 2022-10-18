@@ -1,3 +1,4 @@
+
 # Open Image Experiment
 
 We initially want to configure this experiment in order to run it on our cluster.
@@ -47,6 +48,10 @@ The command we need is the following:
 
 ```bash
 nvidia-smi --query-gpu=timestamp,name,index,pci.bus_id,utilization.gpu,utilization.memory,memory.total,memory.free,memory.used --format=csv --filename=</output/file/path.csv> --loop-ms=<period-of-monitoring>
+```
 
-I think we need to lauch this monitor just before the parameter server, just by adding one line of code to `driver.py`.
+I think we need to launch this monitor just before the parameter server, just by adding one line of code to `driver.py`.
 We can also modify `shutdown.py` in order to include `nvidia-smi` in the list of processes to shut down.
+
+I've implemented the monitoring, it's configuration is in `conf.yml`.
+I did manage to make it start automatically (it starts ~15 seconds before the GPU is being used), but I didn't manage to make it stop automatically. 
