@@ -2,6 +2,7 @@
 
 # ========== Cluster configuration ========== 
 # ip address of the parameter server (need 1 GPU process)
+# ps_ip: 127.0.0.1 # localhost
 # ps_ip: 128.232.115.65  # tarawera
 # ps_ip: 128.232.115.66 # ngongotaha
 ps_ip: 128.232.115.0  # mauao
@@ -14,8 +15,10 @@ worker_ips:
     # - 128.232.115.65:[1] # worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
     # - 128.232.115.65:[1,1]
 
+# This will set the `cuda_id` for the workers
 cuda_ids: [[0]]
 # cuda_ids: [[0],[0]]
+# This will set the `cuda_id` for the parameter server
 ps_cuda_id: 0
 
 exp_path: $FEDSCALE_HOME/fedscale/core
@@ -25,6 +28,7 @@ executor_entry: execution/executor.py
 
 aggregator_entry: aggregation/aggregator.py
 
+# This is useless in local simulation, it's used only when `driver.py` il launched from a different node w.r.t. `ps_ip` and `worker_ips`  
 auth:
     ssh_user: "ls985"
     ssh_private_key: ~/.ssh/id_ed25519 
