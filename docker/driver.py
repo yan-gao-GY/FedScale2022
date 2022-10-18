@@ -10,6 +10,7 @@ import time
 import json
 import yaml
 import socket
+import pathlib
 
 
 def flatten(d):
@@ -47,6 +48,11 @@ def process_cmd(yaml_file, local=False):
     cmd_script_list = []
     cuda_ids = yaml_conf['cuda_ids']
     ps_cuda_id = yaml_conf['ps_cuda_id']
+    
+    # monitoring
+    monitor = yaml_conf['monitor']['flag']
+    monitor_period = yaml_conf['monitor']['period']
+    monitor_logpath = yaml_conf['monitor']['log_path']
 
     executor_configs = "=".join(yaml_conf['worker_ips'])
     for ip_gpu in yaml_conf['worker_ips']:
@@ -91,6 +97,19 @@ def process_cmd(yaml_file, local=False):
     if use_container and total_gpu_processes + 1 != len(ports):
         print(f'Error: there are {total_gpu_processes + 1} processes but {len(ports)} ports mapped, please check your config file')
         exit(1)
+    
+    # =========== Starting monitoring if requested ==========
+    if monitor == 'yes':
+        monitor_filename = monitor_logpath+"/{}_{}.csv".format(datetime.datetime.now().strftime("%Y_%m_%d-%I:%M:%S_%p"), job_name)
+        # pathlib.Path(monitor_filename).touch()
+        monitor_cmd = f"nvidia-smi --query-gpu=timestamp,name,index,pci.bus_id,utilization.gpu,utilization.memory,memory.total,memory.free,memory.used --format=csv --filename={monitor_filename} --loop-ms={monitor_period}"
+        with open(f"{job_name}_logging", 'a') as fout:
+            if local:
+                subprocess.Popen(monitor_cmd, shell=True, stdout=fout, stderr=fout)
+            else:
+                subprocess.Popen(f'ssh {submit_user}{ps_ip} "{setup_cmd} {monitor_cmd}"',
+                                shell=True, stdout=fout, stderr=fout)
+        
 
     # =========== Submit job to parameter server ============
     running_vms.add(ps_ip)
@@ -231,8 +250,8 @@ def process_cmd(yaml_file, local=False):
 
     print(f"Submitted job, please check your logs {job_conf['log_path']}/logs/{job_conf['job_name']}/{time_stamp} for status")
 
-
-def terminate(job_name):
+# added monitor handling
+def terminate(job_name, monitor='', local=False):
 
     current_path = os.path.dirname(os.path.abspath(__file__))
     job_meta_path = os.path.join(current_path, job_name)
@@ -244,6 +263,7 @@ def terminate(job_name):
         job_meta = pickle.load(fin)
 
     if job_meta['use_container']:
+        # TODO: adding `local` alternative
         for name, meta_dict in job_meta['container_dict'].items():
             print(f"Shutting down container {name} on {meta_dict['ip']}")
             with open(f"{job_name}_logging", 'a') as fout:
@@ -253,15 +273,20 @@ def terminate(job_name):
         for vm_ip in job_meta['vms']:
             print(f"Shutting down job on {vm_ip}")
             with open(f"{job_name}_logging", 'a') as fout:
-                subprocess.Popen(f'ssh {job_meta["user"]}{vm_ip} "python {current_path}/shutdown.py {job_name}"',
-                                shell=True, stdout=fout, stderr=fout)
+                # adding `local` alternative, following the syntax in `process_cmd`
+                if local:
+                    subprocess.Popen(f'python {current_path}/shutdown.py {job_name} {monitor}',
+                                    shell=True, stdout=fout, stderr=fout)
+                else:
+                    subprocess.Popen(f'ssh {job_meta["user"]}{vm_ip} "python {current_path}/shutdown.py {job_name} {monitor}"',
+                                    shell=True, stdout=fout, stderr=fout)
 
 print_help: bool = False
 if len(sys.argv) > 1:
     if sys.argv[1] == 'submit' or sys.argv[1] == 'start':
         process_cmd(sys.argv[2], False if sys.argv[1] == 'submit' else True)
-    elif sys.argv[1] == 'stop':
-        terminate(sys.argv[2])
+    elif sys.argv[1] == 'stop' or sys.argv[1] == 'lstop':
+        terminate(sys.argv[2], sys.argv[3], False if sys.argv[1] == 'stop' else True)
     else:
         print_help = True
 else:
