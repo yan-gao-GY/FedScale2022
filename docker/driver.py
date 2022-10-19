@@ -46,9 +46,11 @@ def process_cmd(yaml_file, local=False):
     ps_ip = yaml_conf['ps_ip']
     worker_ips, total_gpus = [], []
     cmd_script_list = []
+    
     # cuda for workers
     w_use_cuda = yaml_conf['w_use_cuda']
-    cuda_ids = yaml_conf['cuda_ids']
+    cuda_ids = yaml_conf['cuda_ids'] # this is a list of lists
+    
     # cuda for server
     ps_use_cuda = yaml_conf['ps_use_cuda']
     ps_cuda_id = yaml_conf['ps_cuda_id']
@@ -66,7 +68,8 @@ def process_cmd(yaml_file, local=False):
 
     time_stamp = datetime.datetime.fromtimestamp(
         time.time()).strftime('%m%d_%H%M%S')
-    # Defining the running real nodes
+    
+    # Defining the running real nodes, using set we can handle repetitions
     running_vms = set()
     running_vms.add(ps_ip)
     [running_vms.add(worker) for worker in worker_ips]
@@ -107,11 +110,10 @@ def process_cmd(yaml_file, local=False):
         exit(1)
     
     # =========== Starting monitoring if requested ==========
-    # TODO: start a monitor for each node
+    # TODO: set CUDA_VISIBLE_DEVICES? 'cause is moinitoring all the GPUs of the machine
     if monitor == 'yes':
         for node, worker in enumerate(running_vms):
             monitor_filename = monitor_logpath+"/node{}_{}_{}.csv".format(node, datetime.datetime.now().strftime("%Y_%m_%d-%I:%M:%S_%p"), job_name)
-            # pathlib.Path(monitor_filename).touch()
             monitor_cmd = f"nvidia-smi --query-gpu=timestamp,name,index,pci.bus_id,utilization.gpu,utilization.memory,memory.total,memory.free,memory.used --format=csv --filename={monitor_filename} --loop-ms={monitor_period}"
             with open(f"{job_name}_logging", 'a') as fout:
                 if local:
@@ -146,17 +148,16 @@ def process_cmd(yaml_file, local=False):
             subprocess.Popen(f'ssh {submit_user}{ps_ip} "{setup_cmd} {ps_cmd}"',
                              shell=True, stdout=fout, stderr=fout)
 
+    # probably we can set a time lower than 10 seconds
     time.sleep(10)
     # =========== Submit job to each worker ============
-    # TODO: rethink the variables' names
-    rank_id = 1
-    node_num = 0
-    for worker, gpu_ids in zip(worker_ips, cuda_ids):
+    rank_id = 1 # TODO: what's this?
+    for worker, gpu_ids in zip(worker_ips, cuda_ids): # loop on workers' ips
 
         if not use_container:
             print(f"Starting workers on {worker} ...")
         
-        for cuda_id in gpu_ids:
+        for cuda_id in gpu_ids: # loop on gpu_ids of the current ip
             if use_container:
                 exec_name = f"fedscale-exec{rank_id}-{time_stamp}"
                 print(f'Starting executor container {exec_name} on {worker}')
@@ -182,9 +183,8 @@ def process_cmd(yaml_file, local=False):
                 else:
                     subprocess.Popen(f'ssh {submit_user}{worker} "{setup_cmd} {worker_cmd}"',
                                         shell=True, stdout=fout, stderr=fout)
-        node_num += 1
 
-    # dump the address of running workers
+    # Dump the addresses of running workers
     current_path = os.path.dirname(os.path.abspath(__file__))
     job_name = os.path.join(current_path, job_name)
     with open(job_name, 'wb') as fout:
