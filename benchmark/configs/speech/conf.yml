@@ -2,23 +2,20 @@
 
 # ========== Cluster configuration ========== 
 # ip address of the parameter server (need 1 GPU process)
-ps_ip: 10.0.0.2
+ps_ip: 128.232.115.65  # tarawera
+# ps_ip: 128.232.115.66 # ngongotaha
+# ps_ip: 128.232.115.0  # mauao
 
 # ip address of each worker:# of available gpus process on each gpu in this node
 # Note that if we collocate ps and worker on same GPU, then we need to decrease this number of available processes on that GPU by 1
 # E.g., master node has 4 available processes, then 1 for the ps, and worker should be set to: worker:3
-worker_ips: 
-    - 10.0.0.3:[5] # worker_ip: [(# processes on gpu) for gpu in available_gpus]
-    - 10.0.0.4:[5]
-    - 10.0.0.5:[5]
-    - 10.0.0.6:[5]
-    - 10.0.0.7:[5]
-    - 10.0.0.8:[5]
-    - 10.0.0.9:[4]
-    - 10.0.0.10:[4]
-    - 10.0.0.11:[4]
-    - 10.0.0.12:[4]
-    - 10.0.0.13:[4]
+worker_ips:
+    - 128.232.115.65:[1] # worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    # - 128.232.115.66:[1]
+
+# cuda_ids: [[0],[0]]
+cuda_ids: [[0]]
+ps_cuda_id: 0
 
 exp_path: $FEDSCALE_HOME/fedscale/core
 
@@ -28,13 +25,14 @@ executor_entry: execution/executor.py
 aggregator_entry: aggregation/aggregator.py
 
 auth:
-    ssh_user: ""
+    ssh_user: "yan"
     ssh_private_key: ~/.ssh/id_rsa
 
 # cmd to run before we can indeed run FAR (in order)
 setup_commands:
-    - source $HOME/anaconda3/bin/activate fedscale    
-    - export NCCL_SOCKET_IFNAME='enp94s0f0'         # Run "ifconfig" to ensure the right NIC for nccl if you have multiple NICs
+    - . /nfs-share/yan/miniconda3/bin/activate base
+    - conda activate fedscale
+    - export NCCL_SOCKET_IFNAME="enp1s0f0"         # Run "ifconfig" to ensure the right NIC for nccl if you have multiple NICs
 
 # ========== Additional job configuration ========== 
 # Default parameters are specified in config_parser.py, wherein more description of the parameter can be found
@@ -45,8 +43,8 @@ job_conf:
     - task: speech
     - num_participants: 100                      # Number of participants per round, we use K=100 in our paper, large K will be much slower
     - data_set: google_speech                     # Dataset: openImg, google_speech, stackoverflow
-    - data_dir: $FEDSCALE_HOME/benchmark/dataset/data/google_speech    # Path of the dataset
-    - data_map_file: $FEDSCALE_HOME/benchmark/dataset/data/google_speech/client_data_mapping/train.csv              # Allocation of data to each client, turn to iid setting if not provided
+    - data_dir: /datasets/FedScale/google_speech/google_speech    # Path of the dataset
+    - data_map_file: /datasets/FedScale/google_speech/google_speech/client_data_mapping/train.csv              # Allocation of data to each client, turn to iid setting if not provided
     - device_conf_file: $FEDSCALE_HOME/benchmark/dataset/data/device_info/client_device_capacity     # Path of the client trace
     - device_avail_file: $FEDSCALE_HOME/benchmark/dataset/data/device_info/client_behave_trace
     - model: resnet34                            # Models: e.g., shufflenet_v2_x2_0, mobilenet_v2, resnet34, albert-base-v2
