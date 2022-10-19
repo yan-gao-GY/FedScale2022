@@ -2,25 +2,25 @@
 
 # ========== Cluster configuration ========== 
 # ip address of the parameter server (need 1 GPU process)
-ps_ip: 10.0.0.1
+# ps_ip: 127.0.0.1 # localhost
+ps_ip: 128.232.115.65  # tarawera
+# ps_ip: 128.232.115.66 # ngongotaha
+# ps_ip: 128.232.115.0  # mauao
 
 # ip address of each worker:# of available gpus process on each gpu in this node
 # Note that if we collocate ps and worker on same GPU, then we need to decrease this number of available processes on that GPU by 1
 # E.g., master node has 4 available processes, then 1 for the ps, and worker should be set to: worker:3
 worker_ips: 
-    - 10.0.0.2:[4] # worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes. 
-    - 10.0.0.3:[4] 
-    - 10.0.0.4:[4]
-    - 10.0.0.5:[4]
-    - 10.0.0.6:[4]
-    - 10.0.0.7:[4]
-    - 10.0.0.8:[4]
-    - 10.0.0.9:[4]
-    - 10.0.0.10:[4]
-    - 10.0.0.11:[4]
-    - 10.0.0.12:[4]
-    - 10.0.0.13:[4]
-    - 10.0.0.14:[4]
+    # - 127.0.0.1:[2] # worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    - 128.232.115.65:[12] # worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+
+# This will set the `cuda_id` for the workers
+w_use_cuda: True
+cuda_ids: [[1,2,3,4,5,6,7,1,2,3,4,5,6,7]]
+# cuda_ids: [[0],[0]]
+# This will set the `cuda_id` for the parameter server
+ps_use_cuda: True
+ps_cuda_id: 0
 
 exp_path: $FEDSCALE_HOME/fedscale/core
 
@@ -29,14 +29,23 @@ executor_entry: execution/executor.py
 
 aggregator_entry: aggregation/aggregator.py
 
+# This is useless in local simulation, it's used only when `driver.py` il launched from a different node w.r.t. `ps_ip` and `worker_ips`  
 auth:
-    ssh_user: ""
-    ssh_private_key: ~/.ssh/id_rsa
+    ssh_user: "ls985"
+    # ssh_private_key: ~/.ssh/id_ed25519 
 
-# cmd to run before we can indeed run FAR (in order)
+# This configure whether to monitor or not GPU usage: flag must be (yes/no), the period is given in milliseconds, the log path must be a valid path
+monitor:
+    flag: "yes"
+    period: 1
+    log_path: $FEDSCALE_HOME/benchmark/logs/monitor
+
+
+# cmd to run before we can indeed run FAR (in order), these commands are called for every subprocess launched by `driver.py` but only in non-local mode (i.e. when using `ssh`)
 setup_commands:
-    - source $HOME/anaconda3/bin/activate fedscale
-    - export NCCL_SOCKET_IFNAME='enp94s0f0'         # Run "ifconfig" to ensure the right NIC for nccl if you have multiple NICs
+    # - export FEDSCALE_HOME='/nfs-share/ls985/FedScale2022'
+    - source /nfs-share/ls985/anaconda3/bin/activate fedscale
+    # - export NCCL_SOCKET_IFNAME='enp94s0f0'         # Run "ifconfig" to ensure the right NIC for nccl if you have multiple NICs
 
 # ========== Additional job configuration ========== 
 # Default parameters are specified in config_parser.py, wherein more description of the parameter can be found
@@ -44,16 +53,16 @@ setup_commands:
 job_conf: 
     - job_name: openimage                   # Generate logs under this folder: log_path/job_name/time_stamp
     - log_path: $FEDSCALE_HOME/benchmark # Path of log files
-    - num_participants: 100                      # Number of participants per round, we use K=100 in our paper, large K will be much slower
+    - num_participants: 10                      # Number of participants per round, we use K=100 in our paper, large K will be much slower
     - data_set: openImg                     # Dataset: openImg, google_speech, stackoverflow
-    - data_dir: $FEDSCALE_HOME/benchmark/dataset/data/openImg    # Path of the dataset
-    - data_map_file: $FEDSCALE_HOME/benchmark/dataset/data/openImg/client_data_mapping/train.csv              # Allocation of data to each client, turn to iid setting if not provided
+    - data_dir: /datasets/FedScale/openImg    # Path of the dataset
+    - data_map_file: /datasets/FedScale/openImg/client_data_mapping/train.csv              # Allocation of data to each client, turn to iid setting if not provided
     - device_conf_file: $FEDSCALE_HOME/benchmark/dataset/data/device_info/client_device_capacity     # Path of the client trace
     - device_avail_file: $FEDSCALE_HOME/benchmark/dataset/data/device_info/client_behave_trace
     - model: shufflenet_v2_x2_0                            # Models: e.g., shufflenet_v2_x2_0, mobilenet_v2, resnet34, albert-base-v2
     - gradient_policy: yogi                 # {"fed-yogi", "fed-prox", "fed-avg"}, "fed-avg" by default
     - eval_interval: 30                     # How many rounds to run a testing on the testing set
-    - rounds: 5000                          # Number of rounds to run this training. We use 1000 in our paper, while it may converge w/ ~400 rounds
+    - rounds: 10                          # Number of rounds to run this training. We use 1000 in our paper, while it may converge w/ ~400 rounds
     - filter_less: 21                       # Remove clients w/ less than 21 samples
     - num_loaders: 2
     - yogi_eta: 3e-3 
