@@ -1,8 +1,31 @@
 
 # Open Image Experiment
 
+## Environment
+
+First we need to instatiate te execution environment that will be hardcoded in `conf.yml` files.
+In order to do that execute the following commands:
+
+```bash
+cd /nfs-share/ls985/FedScale2022
+
+# Please replace ~/.bashrc with ~/.bash_profile for MacOS
+FEDSCALE_HOME=$(pwd)
+echo export FEDSCALE_HOME=$(pwd) >> ~/.bashrc # THIS MUST BE DONE IN EVERY MACHINE
+echo alias fedscale=\'bash $FEDSCALE_HOME/fedscale.sh\' >> ~/.bashrc 
+conda init bash
+. ~/.bashrc
+
+conda env create -f  $FEDSCALE_HOME/environment1.yml
+conda activate fedscale-11
+/nfs-share/ls985/anaconda3/envs/fedscale-11/bin/pip install -e .
+conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch
+```
+
+## Useful commands
+
 We initially want to configure this experiment in order to run it on our cluster.
-We ahve to keep in mind that FedScale cannot run under the SLURM management, so we'll need to request an interactive shell to SLURM using:
+We have to keep in mind that FedScale cannot run under the SLURM management, so we'll need to request an interactive shell to SLURM using:
 
 ```bash
 srun -c <number_of_cpus> --gres=gpu:<gpu_type_name>:<number_of_gpu_of_this_type> --partition=normal --pty bash
@@ -60,4 +83,21 @@ I think we need to launch this monitor just before the parameter server, just by
 We can also modify `shutdown.py` in order to include `nvidia-smi` in the list of processes to shut down.
 
 I've implemented the monitoring, it's configuration is in `conf.yml`.
-I did manage to make it start automatically (it starts ~15 seconds before the GPU is being used), but I didn't manage to make it stop automatically. 
+I did manage to make it start automatically (it starts ~15 seconds before the GPU is being used), but I didn't manage to make it stop automatically.
+
+## Ordering of GPUs in `mauao`
+
+Remember that in `mauao` the `CUDA_ID`s are listed with the all the A40 before the V100, e.g. the first V100 is at `CUDA_ID=6`.
+Thanks to Pedro, I've managed to set the same ordering that `nvidia-smi` command has. It was sufficient to put the following lines in my `~.bashrc`.
+
+```bash
+export CUDA_DEVICE_ORDER="PCI_BUS_ID"
+```
+
+## EXPERIMENTS
+
+EXP1: 11 rounds with 1 client per worker per gpu, ps on cpu (4 clients per round)--> count the number of clients that can fit a specific gpu
+EXP2: fill the gpus with as much client as we can --> max utilization of GPUs for FedScale --> flower with the automated thing is better for heterogeneous setups
+(potEXP3): automated FedScale vs. automated Flower
+
+In order to run "speech" experiment, we need to change the deafult conda package `resampy` from the version `0.4.2` to the version `0.3.1`.
