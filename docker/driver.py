@@ -60,8 +60,8 @@ def process_cmd(yaml_file, local=False):
     monitor_period = yaml_conf['monitor']['period']
     monitor_logpath = yaml_conf['monitor']['log_path']
 
-    if not os.path.exists(monitor_logpath):
-        os.mkdir(monitor_logpath)
+    if not os.path.exists(os.path.expandvars(monitor_logpath)):
+        os.mkdir(os.path.expandvars(monitor_logpath))
 
     executor_configs = "=".join(yaml_conf['worker_ips'])
     for ip_gpu in yaml_conf['worker_ips']:
