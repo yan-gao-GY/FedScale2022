@@ -39,7 +39,8 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-N_JOBS = cpu_count()
+# NOTE: Reduced for intese use of CPU even under slurm constraints
+N_JOBS = 8#cpu_count()
 logger = logging.getLogger(__name__)
 
 
