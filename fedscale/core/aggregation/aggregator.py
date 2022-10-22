@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
+import os
 import pickle
 import threading
 from concurrent import futures
+import pathlib
 
 import grpc
 import torch
@@ -32,7 +34,7 @@ class Aggregator(job_api_pb2_grpc.JobServiceServicer):
 
         logging.info(f"Job args {args}")
 
-        self.args = args
+        self.args = args # NOTE: this contains 'job_name', 
         self.experiment_mode = args.experiment_mode
         self.device = args.cuda_device if args.use_cuda else torch.device(
             'cpu')
@@ -565,6 +567,26 @@ class Aggregator(job_api_pb2_grpc.JobServiceServicer):
         self.update_default_task_config()
         
         if self.round >= self.args.rounds:
+            # TODO: put here monitor stopping, we need ssh_user, worker_ips, job_name; not working by now
+            # # Stopping monitors
+            # # NOTE: FileNotFoundError: [Errno 2] No such file or directory: '$FEDSCALE_HOME/docker/openimage'
+            # job_meta_path = pathlib.Path(self.args.log_path).absolute().parent/'docker'/self.args.job_name
+            # # job_meta_path = os.path.join(os.path.expandvars('$FEDSCALE_HOME/docker'), self.args.job_name)
+            # if not os.path.isfile(job_meta_path):
+            #     print(f"Fail to find {self.args.job_name} meta file in {job_meta_path}, as it does not exist")
+            # else:
+            #     with open(job_meta_path, 'rb') as fin:
+            #         job_meta = pickle.load(fin)
+            #     for vm_ip in job_meta['vms']:
+            #         print(f"Shutting down monitor on {vm_ip}")
+            #         cmd = ''
+            #         cmd += (f"ps -ef | grep nvidia-smi | grep query | grep {self.args.job_name} >> '$FEDSCALE_HOME/fedscale_running_temp.txt'")
+            #         print(f'ssh {job_meta["user"]}{vm_ip} "{cmd} && exit"')
+            #         os.system(f'ssh {job_meta["user"]}{vm_ip} "{cmd} && exit"')
+            #         time.sleep(1)
+            #         [os.system(f'ssh {job_meta["user"]}{vm_ip} "kill -9 {str(l.split()[1])} 1>/dev/null 2>&1"') for l in open(os.path.join(os.getenv("FEDSCALE_HOME"), "fedscale_running_temp.txt")).readlines()]
+            #         os.system(f'ssh {job_meta["user"]}{vm_ip} "rm $FEDSCALE_HOME/fedscale_running_temp.txt"')
+            #     time.sleep(1)
             self.broadcast_aggregator_events(commons.SHUT_DOWN)
         elif self.round % self.args.eval_interval == 0:
             self.broadcast_aggregator_events(commons.UPDATE_MODEL)
