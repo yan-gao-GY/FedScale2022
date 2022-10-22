@@ -33,7 +33,7 @@ def load_yaml_conf(yaml_file):
     return data
 
 
-def process_cmd(yaml_file, local=False):
+def process_cmd(yaml_file, local=False, node: int = 0):
 
     yaml_conf = load_yaml_conf(yaml_file)
 
@@ -112,90 +112,99 @@ def process_cmd(yaml_file, local=False):
         print(f'Error: there are {total_gpu_processes + 1} processes but {len(ports)} ports mapped, please check your config file')
         exit(1)
     
+    # =========== Opening the logging file ==================
+    if node == 0:
+        with open(f"{job_name}_logging", 'wb') as fout:
+            pass
+    
     # =========== Starting monitoring if requested ==========
-    # TODO: set CUDA_VISIBLE_DEVICES? 'cause is moinitoring all the GPUs of the machine
     if monitor == 'yes':
-        for node, worker in enumerate(running_vms):
-            monitor_filename = monitor_logpath+"/node{}_{}_{}.csv".format(node, datetime.datetime.now().strftime("%Y_%m_%d-%I:%M:%S_%p"), job_name)
-            monitor_cmd = f"nvidia-smi --query-gpu=timestamp,name,index,pci.bus_id,utilization.gpu,utilization.memory,memory.total,memory.free,memory.used --format=csv --filename={monitor_filename} --loop-ms={monitor_period}"
-            with open(f"{job_name}_logging", 'a') as fout:
-                if local:
-                    subprocess.Popen(monitor_cmd, shell=True, stdout=fout, stderr=fout)
-                else:
-                    subprocess.Popen(f'ssh {submit_user}{worker} "{setup_cmd} {monitor_cmd}"',
-                                    shell=True, stdout=fout, stderr=fout)
+        # for node, worker in enumerate(running_vms):
+        # Now is one monitor per `driver.py` execution
+        monitor_filename = monitor_logpath+"/node{}_{}_{}.csv".format(node, datetime.datetime.now().strftime("%Y_%m_%d-%I:%M:%S_%p"), job_name)
+        monitor_cmd = f"nvidia-smi --query-gpu=timestamp,name,index,pci.bus_id,utilization.gpu,utilization.memory,memory.total,memory.free,memory.used --format=csv --filename={monitor_filename} --loop-ms={monitor_period}"
+        with open(f"{job_name}_logging", 'a') as fout:
+            if local:
+                subprocess.Popen(monitor_cmd, shell=True, stdout=fout, stderr=fout)
+            else:
+                subprocess.Popen(f'ssh {submit_user}{running_vms[node]} "{setup_cmd} {monitor_cmd}"',
+                                shell=True, stdout=fout, stderr=fout)
 
     # =========== Submit job to parameter server ============
-    if use_container:
-        # store ip, port of each container
-        ctnr_dict = dict()
-        ps_name = f"fedscale-aggr-{time_stamp}"
-        ctnr_dict[ps_name] = {
-            "type": "aggregator",
-            "ip": ps_ip,
-            "port": ports[0]
-        }
-        print(f"Starting aggregator container {ps_name} on {ps_ip}...")
-        ps_cmd = f" docker run -i --name {ps_name} --network {yaml_conf['container_network']} -p {ports[0]}:30000 --mount type=bind,source={yaml_conf['data_path']},target=/FedScale/benchmark fedscale/fedscale-aggr"
-    else:
-        print(f"Starting aggregator on {ps_ip}...")
-        ps_cmd = f" python {yaml_conf['exp_path']}/{yaml_conf['aggregator_entry']} {conf_script} --this_rank=0 --num_executors={total_gpu_processes} --executor_configs={executor_configs} --use_cuda={ps_use_cuda} --cuda_device=cuda:{ps_cuda_id} "
-
-    with open(f"{job_name}_logging", 'wb') as fout:
-        pass
-
-    with open(f"{job_name}_logging", 'a') as fout:
-        if local:
-            subprocess.Popen(f'{ps_cmd}', shell=True, stdout=fout, stderr=fout)
+    if node == 0:
+        if use_container:
+            # store ip, port of each container
+            ctnr_dict = dict()
+            ps_name = f"fedscale-aggr-{time_stamp}"
+            ctnr_dict[ps_name] = {
+                "type": "aggregator",
+                "ip": ps_ip,
+                "port": ports[0]
+            }
+            print(f"Starting aggregator container {ps_name} on {ps_ip}...")
+            ps_cmd = f" docker run -i --name {ps_name} --network {yaml_conf['container_network']} -p {ports[0]}:30000 --mount type=bind,source={yaml_conf['data_path']},target=/FedScale/benchmark fedscale/fedscale-aggr"
         else:
-            subprocess.Popen(f'ssh {submit_user}{ps_ip} "{setup_cmd} {ps_cmd}"',
-                             shell=True, stdout=fout, stderr=fout)
+            print(f"Starting aggregator on {ps_ip}...")
+            ps_cmd = f" python {yaml_conf['exp_path']}/{yaml_conf['aggregator_entry']} {conf_script} --this_rank=0 --num_executors={total_gpu_processes} --executor_configs={executor_configs} --use_cuda={ps_use_cuda} --cuda_device=cuda:{ps_cuda_id} "
 
-    # probably we can set a time lower than 10 seconds
-    time.sleep(10)
-    # =========== Submit job to each worker ============
-    rank_id = 1 # TODO: what's this?
-    for worker, gpu_ids in zip(worker_ips, cuda_ids): # loop on workers' ips
-
-        if not use_container:
-            print(f"Starting workers on {worker} ...")
-        
-        for cuda_id in gpu_ids: # loop on gpu_ids of the current ip
-            if use_container:
-                exec_name = f"fedscale-exec{rank_id}-{time_stamp}"
-                print(f'Starting executor container {exec_name} on {worker}')
-                ctnr_dict[exec_name] = {
-                    "type": "executor",
-                    "ip": worker,
-                    "port": ports[rank_id],
-                    "rank_id": rank_id,
-                    "cuda_id": cuda_id
-                }
-                
-                worker_cmd = f" docker run -i --name fedscale-exec{rank_id}-{time_stamp} --network {yaml_conf['container_network']} -p {ports[rank_id]}:32000 --mount type=bind,source={yaml_conf['data_path']},target=/FedScale/benchmark fedscale/fedscale-exec"
+        with open(f"{job_name}_logging", 'a') as fout:
+            if local:
+                subprocess.Popen(f'{ps_cmd}', shell=True, stdout=fout, stderr=fout)
             else:
-                print(f"CUDA_ID for this worker in {worker} is {cuda_id}")
-                worker_cmd = f" python {yaml_conf['exp_path']}/{yaml_conf['executor_entry']} {conf_script} --this_rank={rank_id} --num_executors={total_gpu_processes} --use_cuda={w_use_cuda} --cuda_device=cuda:{cuda_id} "
-            rank_id += 1
+                subprocess.Popen(f'ssh {submit_user}{ps_ip} "{setup_cmd} {ps_cmd}"',
+                                shell=True, stdout=fout, stderr=fout)
 
-            with open(f"{job_name}_logging", 'a') as fout:
-                time.sleep(2)
-                if local:
-                    subprocess.Popen(f'{worker_cmd}',
-                                        shell=True, stdout=fout, stderr=fout)
-                else:
-                    subprocess.Popen(f'ssh {submit_user}{worker} "{setup_cmd} {worker_cmd}"',
-                                        shell=True, stdout=fout, stderr=fout)
+        # NOTE: probably we can set a time lower than 10 seconds
+        time.sleep(10)
+    # =========== Submit job to each worker ============
+    # This is because we need to keep track of this since it identifies workers
+    rank_id = 1 if node == 0 else sum([len(listElem) for listElem in cuda_ids[:int(node)]])+1
+    print(worker_ips)
+    print(cuda_ids)
+    worker = worker_ips[node]
+    gpu_ids = cuda_ids[node]
+    print(f"Executing worker {worker} in node {node}")
+    print(f"Using GPU_IDs {gpu_ids}")
+    print(f"Starting from rank {rank_id}")
+    
+    for cuda_id in gpu_ids: # loop on gpu_ids of the current ip
+        if use_container:
+            exec_name = f"fedscale-exec{rank_id}-{time_stamp}"
+            print(f'Starting executor container {exec_name} on {worker}')
+            ctnr_dict[exec_name] = {
+                "type": "executor",
+                "ip": worker,
+                "port": ports[rank_id],
+                "rank_id": rank_id,
+                "cuda_id": cuda_id
+            }
+            
+            worker_cmd = f" docker run -i --name fedscale-exec{rank_id}-{time_stamp} --network {yaml_conf['container_network']} -p {ports[rank_id]}:32000 --mount type=bind,source={yaml_conf['data_path']},target=/FedScale/benchmark fedscale/fedscale-exec"
+        else:
+            print(f"CUDA_ID for this worker in {worker} is {cuda_id}")
+            worker_cmd = f" python {yaml_conf['exp_path']}/{yaml_conf['executor_entry']} {conf_script} --this_rank={rank_id} --num_executors={total_gpu_processes} --use_cuda={w_use_cuda} --cuda_device=cuda:{cuda_id} "
+        rank_id += 1
+
+        with open(f"{job_name}_logging", 'a') as fout:
+            time.sleep(2)
+            if local:
+                subprocess.Popen(f'{worker_cmd}',
+                                    shell=True, stdout=fout, stderr=fout)
+            else:
+                subprocess.Popen(f'ssh {submit_user}{worker} "{setup_cmd} {worker_cmd}"',
+                                    shell=True, stdout=fout, stderr=fout)
+        # break
 
     # Dump the addresses of running workers
-    current_path = os.path.dirname(os.path.abspath(__file__))
-    job_name = os.path.join(current_path, job_name)
-    with open(job_name, 'wb') as fout:
-        if use_container:
-            job_meta = {'user': submit_user, 'vms': running_vms, 'container_dict': ctnr_dict, 'use_container': True}
-        else:
-            job_meta = {'user': submit_user, 'vms': running_vms, 'use_container': False}
-        pickle.dump(job_meta, fout)
+    if node == 0:
+        current_path = os.path.dirname(os.path.abspath(__file__))
+        job_name = os.path.join(current_path, job_name)
+        with open(job_name, 'wb') as fout:
+            if use_container:
+                job_meta = {'user': submit_user, 'vms': running_vms, 'container_dict': ctnr_dict, 'use_container': True}
+            else:
+                job_meta = {'user': submit_user, 'vms': running_vms, 'use_container': False}
+            pickle.dump(job_meta, fout)
 
     # =========== Container: initialize containers ============
     if use_container:
@@ -282,26 +291,43 @@ def terminate(job_name, monitor='', local=False):
                 subprocess.Popen(f'ssh {job_meta["user"]}{meta_dict["ip"]} "docker rm --force {name}"',
                                 shell=True, stdout=fout, stderr=fout)          
     else:
-        for vm_ip in job_meta['vms']:
-            print(f"Shutting down job on {vm_ip}")
-            with open(f"{job_name}_logging", 'a') as fout:
-                # adding `local` alternative, following the syntax in `process_cmd`
-                if local:
-                    subprocess.Popen(f'python {current_path}/shutdown.py {job_name} {monitor}',
-                                    shell=True, stdout=fout, stderr=fout)
-                else:
+        # adding 'local' alternative, following the syntax in 'process_cmd'
+        if local:
+            cmd = ""
+            if job_name == 'all':
+                cmd += (f"ps -ef | grep python | grep FedScale > {os.path.expandvars('$FEDSCALE_HOME')}/fedscale_running_temp.txt")
+            else:
+                cmd += (f"ps -ef | grep python | grep job_name={job_name} > '{os.path.expandvars('$FEDSCALE_HOME')}/fedscale_running_temp.txt'")
+            print(f'"{cmd}"')
+            subprocess.Popen([cmd],shell=True)
+            # NOTE: probably not needed
+            time.sleep(1)
+            cmd = ""
+            # added for monitor
+            if monitor == 'monitor':
+                cmd += (f"ps -ef | grep nvidia-smi | grep query | grep {job_name} >> $FEDSCALE_HOME/fedscale_running_temp.txt")
+                print(f'"{cmd}"')
+                subprocess.Popen([cmd],shell=True)
+            # NOTE: probably not needed
+            time.sleep(1)
+            [subprocess.Popen([f'kill -9 {str(l.split()[1])} 1>/dev/null 2>&1'], shell=True) for l in open(os.path.join(os.getenv("FEDSCALE_HOME"), "fedscale_running_temp.txt")).readlines()]
+            subprocess.Popen(["rm $FEDSCALE_HOME/fedscale_running_temp.txt"], shell=True)
+        else:
+            for vm_ip in job_meta['vms']:
+                print(f"Shutting down job on {vm_ip}")
+                with open(f"{job_name}_logging", 'a') as fout:
                     cmd = ''
                     if job_name == 'all':
                         cmd += ("ps -ef | grep python | grep FedScale > '$FEDSCALE_HOME/fedscale_running_temp.txt'")
                     else:
-                        cmd += ("ps -ef | grep python | grep job_name={} > '$FEDSCALE_HOME/fedscale_running_temp.txt'".format(job_name))
+                        cmd += (f"ps -ef | grep python | grep job_name={job_name} > '$FEDSCALE_HOME/fedscale_running_temp.txt'")
                     print(f'ssh {job_meta["user"]}{vm_ip} "{cmd} && exit"')
                     os.system(f'ssh {job_meta["user"]}{vm_ip} "{cmd} && exit"')
                     time.sleep(1)
                     cmd = ''
                     # added for monitor
                     if monitor == 'monitor':
-                        cmd += ("ps -ef | grep nvidia-smi | grep query >> '$FEDSCALE_HOME/fedscale_running_temp.txt'")
+                        cmd += (f"ps -ef | grep nvidia-smi | grep query | grep {job_name} >> '$FEDSCALE_HOME/fedscale_running_temp.txt'")
                     print(f'ssh {job_meta["user"]}{vm_ip} "{cmd} && exit"')
                     os.system(f'ssh {job_meta["user"]}{vm_ip} "{cmd} && exit"')
                     time.sleep(1)
@@ -311,7 +337,7 @@ def terminate(job_name, monitor='', local=False):
 print_help: bool = False
 if len(sys.argv) > 1:
     if sys.argv[1] == 'submit' or sys.argv[1] == 'start':
-        process_cmd(sys.argv[2], False if sys.argv[1] == 'submit' else True)
+        process_cmd(yaml_file=sys.argv[2], local=False if sys.argv[1] == 'submit' else True, node=eval(sys.argv[3]))
     elif sys.argv[1] == 'stop' or sys.argv[1] == 'lstop':
         terminate(sys.argv[2], sys.argv[3], False if sys.argv[1] == 'stop' else True)
     else:
