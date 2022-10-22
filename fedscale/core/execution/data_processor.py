@@ -1,11 +1,11 @@
 import os
-
+import time
+import torch
 from torch.nn.utils.rnn import pad_sequence
-
-from fedscale.core.fllibs import *
 
 
 def collate(examples):
+    from fedscale.core.fllibs import tokenizer
     if tokenizer._pad_token is None:
         return (pad_sequence(examples, batch_first=True), None)
     return (pad_sequence(examples, batch_first=True, padding_value=tokenizer.pad_token_id), None)
@@ -15,6 +15,7 @@ def voice_collate_fn(batch):
     def func(p):
         return p[0].size(1)
 
+    # NOTE: this is never used...
     start_time = time.time()
 
     batch = sorted(batch, key=lambda sample: sample[0].size(1), reverse=True)
@@ -37,6 +38,7 @@ def voice_collate_fn(batch):
         targets.extend(target)
     targets = torch.IntTensor(targets)
 
+    # NOTE: this is never used...
     end_time = time.time()
 
     return (inputs, targets, input_percentages, target_sizes), None

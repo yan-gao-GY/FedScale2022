@@ -128,7 +128,7 @@ class Client(object):
             if conf.task == 'nlp':
                 (data, _) = data_pair
                 data, target = mask_tokens(
-                    data, tokenizer, conf, device=conf.device)
+                    data, conf.tokenizer, conf, device=conf.device)
             elif conf.task == 'voice':
                 (data, target, input_percentages,
                     target_sizes), _ = data_pair

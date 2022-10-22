@@ -319,6 +319,7 @@ class Executor(object):
         client_model = self.load_global_model() if model is None else model
 
         conf.clientId, conf.device = clientId, self.device
+        from fedscale.core.fllibs import tokenizer
         conf.tokenizer = tokenizer
         if self.args.task == "rl":
             client_data = self.training_sets
