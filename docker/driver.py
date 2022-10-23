@@ -310,7 +310,7 @@ def terminate(job_name, monitor='', local=False):
                 subprocess.Popen([cmd],shell=True)
             # NOTE: probably not needed
             time.sleep(1)
-            [subprocess.Popen([f'kill -9 {str(l.split()[1])} 1>/dev/null 2>&1'], shell=True) for l in open(os.path.join(os.getenv("FEDSCALE_HOME"), "fedscale_running_temp.txt")).readlines()]
+            [subprocess.Popen([f'kill -9 {str(l.split()[1])} 1>/dev/null 2>&1'], shell=True) for l in open(os.path.join(os.getenv("FEDSCALE_HOME", ""), "fedscale_running_temp.txt")).readlines()]
             subprocess.Popen(["rm $FEDSCALE_HOME/fedscale_running_temp.txt"], shell=True)
         else:
             for vm_ip in job_meta['vms']:
