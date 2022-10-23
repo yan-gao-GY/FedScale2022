@@ -29,6 +29,10 @@ We have to keep in mind that FedScale cannot run under the SLURM management, so 
 
 ```bash
 srun -c <number_of_cpus> --gres=gpu:<gpu_type_name>:<number_of_gpu_of_this_type> --partition=normal --pty bash
+srun -c 10 --gres=gpu:v100:1 --mem=80000 --pty bash # mauao v100
+srun -c 10 --gres=gpu:a40:1 --mem=80000 --pty bash # mauao a40
+srun -c 6 --gres=gpu:rtx2080:1 --mem=80000 --pty bash # ngongotaha
+srun -c 6 --gres=gpu:gtx1080:1 --mem=80000 --pty bash # tarawera
 ```
 
 This command allow us to reserve on SLURM the number of GPUs we need.
@@ -45,7 +49,10 @@ In order to submit the FedScale job, following the FedScale tutorial, we should 
 python </abs/path/to>/docker/driver.py submit </abs/path/to>/benchmark/configs/openimage/conf.yml # non-local
 python $FEDSCALE_HOME/docker/driver.py submit $FEDSCALE_HOME/benchmark/configs/openimage/conf.yml
 python </abs/path/to>/docker/driver.py start </abs/path/to>/benchmark/configs/openimage/conf.yml # local
-python $FEDSCALE_HOME/docker/driver.py start $FEDSCALE_HOME/benchmark/configs/openimage/conf.yml
+python $FEDSCALE_HOME/docker/driver.py start $FEDSCALE_HOME/benchmark/configs/openimage/conf.yml 0
+python $FEDSCALE_HOME/docker/driver.py start $FEDSCALE_HOME/benchmark/configs/openimage/conf.yml 1
+python $FEDSCALE_HOME/docker/driver.py start $FEDSCALE_HOME/benchmark/configs/openimage/conf.yml 2
+python $FEDSCALE_HOME/docker/driver.py start $FEDSCALE_HOME/benchmark/configs/openimage/conf.yml 3
 ```
 
 For stopping the job:
@@ -53,6 +60,7 @@ For stopping the job:
 ```bash
 python </abs/path/to>/docker/driver.py stop [job_name] [monitor]# (specified in the yml config)
 python $FEDSCALE_HOME/docker/driver.py stop openimage monitor
+python $FEDSCALE_HOME/docker/driver.py stop all monitor
 python </abs/path/to>/docker/driver.py lstop [job_name] [monitor]# (specified in the yml config)
 python $FEDSCALE_HOME/docker/driver.py lstop openimage monitor
 ```
@@ -101,3 +109,6 @@ EXP2: fill the gpus with as much client as we can --> max utilization of GPUs fo
 (potEXP3): automated FedScale vs. automated Flower
 
 In order to run "speech" experiment, we need to change the deafult conda package `resampy` from the version `0.4.2` to the version `0.3.1`.
+
+
+ps on ngongotaha, workers on different gpus --> manipulating driver.py
