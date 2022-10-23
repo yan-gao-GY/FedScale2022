@@ -1,0 +1,84 @@
+# Configuration file of FAR training experiment
+
+# ========== Cluster configuration ========== 
+# ip address of the parameter server (need 1 GPU process)
+# NOTE: this must be non-local to let other machine point at the proper server
+# ps_ip: 127.0.0.1 # localhost
+# ps_ip: 128.232.115.65  # tarawera
+# ps_ip: 128.232.115.66 # ngongotaha
+ps_ip: 128.232.115.0  # mauao
+
+# ip address of each worker:# of available gpus process on each gpu in this node
+# Note that if we collocate ps and worker on same GPU, then we need to decrease this number of available processes on that GPU by 1
+# E.g., master node has 4 available processes, then 1 for the ps, and worker should be set to: worker:3
+worker_ips: # TODO: check if this number in square brakets is needed
+    # - 128.232.115.0:[2] # mauao worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    # - 128.232.115.65:[1] # tarawera worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    # - 128.232.115.66:[1] # ngongotaha worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    - 127.0.0.1:[1] # for the V100 in mauao
+    - 127.0.0.1:[1] # for the A40 in mauao
+    - 127.0.0.1:[1] # for the GTX in tarawera
+    - 127.0.0.1:[1] # for the RTX in ngongotaha
+
+# This will set the `cuda_id` for the workers
+w_use_cuda: True
+# cuda_ids: [[3,6],[7],[4]]
+cuda_ids: [[0],[0],[0],[0]]
+# cuda_ids: [[0],[0]]
+# This will set the `cuda_id` for the parameter server
+ps_use_cuda: False
+ps_cuda_id: 0
+
+exp_path: $FEDSCALE_HOME/fedscale/core
+
+# Entry function of executor and aggregator under $exp_path
+executor_entry: execution/executor.py
+
+aggregator_entry: aggregation/aggregator.py
+
+auth:
+    ssh_user: "ls985"
+    # ssh_user: "yan"
+    # ssh_private_key: ~/.ssh/id_rsa
+
+# This configure whether to monitor or not GPU usage: flag must be (yes/no), the period is given in milliseconds, the log path must be a valid path
+monitor:
+    flag: "yes"
+    period: 1
+    # log_path: /nfs-share/ls985/FedScale2022/benchmark/logs/monitor
+    log_path: $FEDSCALE_HOME/benchmark/logs/monitor/speech
+
+
+# cmd to run before we can indeed run FAR (in order)
+setup_commands:
+    # - . /nfs-share/yan/miniconda3/bin/activate base
+    # - conda activate fedscale
+    # - export NCCL_SOCKET_IFNAME="enp1s0f0"         # Run "ifconfig" to ensure the right NIC for nccl if you have multiple NICs
+    - source /nfs-share/ls985/anaconda3/bin/activate fedscale-11
+
+# ========== Additional job configuration ========== 
+# Default parameters are specified in config_parser.py, wherein more description of the parameter can be found
+
+job_conf: 
+    - job_name: speech                   # Generate logs under this folder: log_path/job_name/time_stamp
+    - log_path: $FEDSCALE_HOME/benchmark # Path of log files
+    - task: speech
+    - num_participants: 4                      # Number of participants per round, we use K=100 in our paper, large K will be much slower
+    - data_set: google_speech                     # Dataset: openImg, google_speech, stackoverflow
+    - data_dir: /datasets/FedScale/google_speech/google_speech    # Path of the dataset
+    - data_map_file: /datasets/FedScale/google_speech/google_speech/client_data_mapping/train.csv              # Allocation of data to each client, turn to iid setting if not provided
+    - device_conf_file: $FEDSCALE_HOME/benchmark/dataset/data/device_info/client_device_capacity     # Path of the client trace
+    - device_avail_file: $FEDSCALE_HOME/benchmark/dataset/data/device_info/client_behave_trace
+    - model: resnet34                            # Models: e.g., shufflenet_v2_x2_0, mobilenet_v2, resnet34, albert-base-v2
+    - gradient_policy: yogi                 # {"fed-yogi", "fed-prox", "fed-avg"}, "fed-avg" by default
+    - eval_interval: 30                     # How many rounds to run a testing on the testing set
+    - rounds: 11                          # Number of rounds to run this training. We use 1000 in our paper, while it may converge w/ ~400 rounds
+    - filter_less: 21                       # Remove clients w/ less than 21 samples
+    - num_loaders: 4
+    - yogi_eta: 3e-3 
+    - yogi_tau: 1e-8
+    - local_steps: 30
+    - learning_rate: 0.05
+    - batch_size: 20
+    - test_bsz: 20
+
