@@ -11,13 +11,20 @@ ps_ip: 128.232.115.0  # mauao
 # Note that if we collocate ps and worker on same GPU, then we need to decrease this number of available processes on that GPU by 1
 # E.g., master node has 4 available processes, then 1 for the ps, and worker should be set to: worker:3
 worker_ips: # TODO: check if this number in square brakets is needed
-    - 128.232.115.0:[2] # mauao worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
-    - 128.232.115.65:[1] # tarawera worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
-    - 128.232.115.66:[1] # ngongotaha worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    # - 128.232.115.0:[2] # mauao worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    # - 128.232.115.65:[1] # tarawera worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    # - 128.232.115.66:[1] # ngongotaha worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    - 127.0.0.1:[10] # for the V100 in mauao, 32510 MB, 3101 MB per worker
+    - 127.0.0.1:[14] # for the A40 in mauao, 45634 MB, 3207 MB per worker
+    - 127.0.0.1:[4] # for the GTX in tarawera, 11178 MB, 2759 MB per worker
+    - 127.0.0.1:[3] # for the RTX in ngongotaha, 11019 MB, 2962 MB per worker
 
+# NOTE: 8.1% RAM on mauao, 25% RAM on tarawera and ngongotaha per worker
+# NOTE: it should last ~ 10 min
 # This will set the `cuda_id` for the workers
 w_use_cuda: True
-cuda_ids: [[3,6],[3],[4]]
+# cuda_ids: [[3,6],[7],[4]]
+cuda_ids: [[0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0],[0,0,0]] # for the V100s in mauao
 # cuda_ids: [[0],[0]]
 # This will set the `cuda_id` for the parameter server
 ps_use_cuda: False
@@ -56,7 +63,7 @@ job_conf:
     - job_name: reddit                   # Generate logs under this folder: log_path/job_name/time_stamp
     - log_path: $FEDSCALE_HOME/benchmark # Path of log files
     - task: nlp
-    - num_participants: 4                      # Number of participants per round, we use K=100 in our paper, large K will be much slower
+    - num_participants: 31                      # Number of participants per round, we use K=100 in our paper, large K will be much slower
     - data_set: blog                     # Dataset: openImg, google_speech, reddit
     - data_dir: /datasets/FedScale/reddit/reddit    # Path of the dataset
     - data_map_file: /datasets/FedScale/reddit/reddit/client_data_mapping/train.csv              # Allocation of data to each client, turn to iid setting if not provided

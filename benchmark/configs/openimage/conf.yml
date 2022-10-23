@@ -2,6 +2,7 @@
 
 # ========== Cluster configuration ========== 
 # ip address of the parameter server (need 1 GPU process)
+# NOTE: this must be non-local to let other machine point at the proper server
 # ps_ip: 127.0.0.1 # localhost
 # ps_ip: 128.232.115.65  # tarawera
 # ps_ip: 128.232.115.66 # ngongotaha
@@ -11,14 +12,20 @@ ps_ip: 128.232.115.0  # mauao
 # Note that if we collocate ps and worker on same GPU, then we need to decrease this number of available processes on that GPU by 1
 # E.g., master node has 4 available processes, then 1 for the ps, and worker should be set to: worker:3
 worker_ips: # TODO: check if this number in square brakets is needed
-    - 128.232.115.0:[2] # mauao worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
-    - 128.232.115.65:[1] # tarawera worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
-    - 128.232.115.66:[1] # ngongotaha worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    # - 128.232.115.0:[2] # mauao worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    # - 128.232.115.65:[1] # tarawera worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    # - 128.232.115.66:[1] # ngongotaha worker_ip: [(# processes on gpu) for gpu in available_gpus] eg. 10.0.0.2:[4,4,4,4] This node has 4 gpus, each gpu has 4 processes.
+    - 127.0.0.1:[13] # for the V100 in mauao, 32510 MB, 2389 MB per worker
+    - 127.0.0.1:[15] # for the A40 in mauao, 45634 MB, 2947 MB per worker
+    - 127.0.0.1:[5] # for the GTX in tarawera, 11178 MB, 1929 MB per worker
+    - 127.0.0.1:[4] # for the RTX in ngongotaha, 11019 MB, 2260 MB per worker
 
+# NOTE: it should last 41 minutes, 150 s per round, no RAM issues
 # This will set the `cuda_id` for the workers
 w_use_cuda: True
-cuda_ids: [[3,6],[3],[4]]
-# cuda_ids: [[0],[0]]
+# cuda_ids: [[3,6],[7],[4]]
+cuda_ids: [[0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],[0,0,0,0,0],[0,0,0,0]]
+# cuda_ids: [[0]] # for the GTX in ngongotaha
 # This will set the `cuda_id` for the parameter server
 ps_use_cuda: False
 ps_cuda_id: 0
@@ -55,7 +62,7 @@ setup_commands:
 job_conf: 
     - job_name: openimage                   # Generate logs under this folder: log_path/job_name/time_stamp
     - log_path: $FEDSCALE_HOME/benchmark # Path of log files
-    - num_participants: 4                      # Number of participants per round, we use K=100 in our paper, large K will be much slower
+    - num_participants: 37                      # Number of participants per round, we use K=100 in our paper, large K will be much slower
     - data_set: openImg                     # Dataset: openImg, google_speech, stackoverflow
     - data_dir: /datasets/FedScale/openImg    # Path of the dataset
     - data_map_file: /datasets/FedScale/openImg/client_data_mapping/train.csv              # Allocation of data to each client, turn to iid setting if not provided
