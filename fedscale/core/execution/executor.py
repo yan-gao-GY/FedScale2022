@@ -2,7 +2,6 @@
 import collections
 import gc
 import pickle
-import subprocess
 from argparse import Namespace
 
 import torch
@@ -53,12 +52,13 @@ class Executor(object):
         self.start_run_time = time.time()
         self.received_stop_request = False
         self.event_queue = collections.deque()
-
-        # ======== append PIDs to file ========
-        cmd = (f"ps -ef | grep nvidia-smi | grep query > $HOME/fedscale_running_temp.txt")
-        logging.info(f'Calling "{cmd}" for getting PIDs of monitor')
-        subprocess.Popen([cmd],shell=True)
-        logging.info('Temporary list of PIDs filled up')
+        
+        # TODO: put appending of PIDs for monitor to a file
+        # # ======== append PIDs to file ========
+        # cmd = (f"ps -ef | grep nvidia-smi | grep query > $HOME/fedscale_running_temp.txt")
+        # logging.info(f'Calling "{cmd}" for getting PIDs of monitor')
+        # subprocess.Popen([cmd],shell=True)
+        # logging.info('Temporary list of PIDs filled up')
 
         super(Executor, self).__init__()
 
@@ -270,6 +270,12 @@ class Executor(object):
         # Dump latest model to disk
         with open(self.temp_model_path, 'wb') as model_out:
             pickle.dump(model, model_out)
+        # TODO: dump another model for testing in a second moment
+        # # Dump for eval
+        # globalo_model_path = os.path.join(
+        #     logger.logDir, 'global_model_r'+str(self.round)+'.pth.tar')
+        # with open(globalo_model_path, 'wb') as model_out:
+        #     pickle.dump(model, model_out)
 
     def load_global_model(self):
         """ Load last global model
@@ -326,7 +332,7 @@ class Executor(object):
         client_model = self.load_global_model() if model is None else model
 
         conf.clientId, conf.device = clientId, self.device
-        from fedscale.core.fllibs import tokenizer
+        # FIXME: from fedscale.core.fllibs import tokenizer
         conf.tokenizer = tokenizer
         if self.args.task == "rl":
             client_data = self.training_sets
@@ -450,9 +456,10 @@ class Executor(object):
                     self.UpdateModel(broadcast_config)
 
                 elif current_event == commons.SHUT_DOWN:
-                    logging.info("Shutting down the monitor on this executor node")
-                    [subprocess.Popen([f'kill -9 {str(l.split()[1])} 1>/dev/null 2>&1'], shell=True) for l in open(os.path.join(os.getenv("HOME", ""), "fedscale_running_temp.txt")).readlines()]
-                    logging.info("Shutting down the monitor on the server node")
+                    # TODO: put here the monitor shutdown command
+                    # logging.info("Shutting down the monitor on this executor node")
+                    # [subprocess.Popen([f'kill -9 {str(l.split()[1])} 1>/dev/null 2>&1'], shell=True) for l in open(os.path.join(os.getenv("HOME", ""), "fedscale_running_temp.txt")).readlines()]
+                    # logging.info("Shutting down the monitor on the server node")
                     self.Stop()
 
                 elif current_event == commons.DUMMY_EVENT:
