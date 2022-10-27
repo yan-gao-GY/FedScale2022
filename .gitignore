@@ -34,3 +34,4 @@ common_voice
 puffer  
 landmark  
 coqa
+!./benchmark/configs/*

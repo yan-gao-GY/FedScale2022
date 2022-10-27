@@ -3,14 +3,12 @@
 import datetime
 import os
 import pickle
-import random
 import subprocess
 import sys
 import time
 import json
 import yaml
 import socket
-import pathlib
 
 
 def flatten(d):
@@ -48,7 +46,6 @@ def process_cmd(yaml_file, local=False, node: int = 0):
 
     ps_ip = yaml_conf['ps_ip']
     worker_ips, total_gpus = [], []
-    cmd_script_list = []
     
     # cuda for workers
     w_use_cuda = yaml_conf['w_use_cuda']
@@ -61,10 +58,6 @@ def process_cmd(yaml_file, local=False, node: int = 0):
     # monitoring
     monitor = yaml_conf['monitor']['flag']
     monitor_period = yaml_conf['monitor']['period']
-    monitor_logpath = yaml_conf['monitor']['log_path']
-
-    if not os.path.exists(os.path.expandvars(monitor_logpath)):
-        os.mkdir(os.path.expandvars(monitor_logpath))
 
     executor_configs = "=".join(yaml_conf['worker_ips'])
     for ip_gpu in yaml_conf['worker_ips']:
@@ -99,8 +92,6 @@ def process_cmd(yaml_file, local=False, node: int = 0):
         for item in yaml_conf['setup_commands'][1:]:
             setup_cmd += (item + ' && ')
 
-    cmd_sufix = f" "
-
     for conf_name in job_conf:
         conf_script = conf_script + f' --{conf_name}={job_conf[conf_name]}'
         if conf_name == "job_name":
@@ -123,8 +114,11 @@ def process_cmd(yaml_file, local=False, node: int = 0):
     
     # =========== Starting monitoring if requested ==========
     if monitor == 'yes':
+        monitor_log_dir = os.path.join(log_path, "logs", "monitor")
+        if not os.path.isdir(monitor_log_dir):
+            os.makedirs(monitor_log_dir, exist_ok=True)
         # Now is one monitor per `driver.py` execution
-        monitor_filename = monitor_logpath+"/node{}_{}_{}.csv".format(node, datetime.datetime.now().strftime("%Y_%m_%d-%I:%M:%S_%p"), job_name)
+        monitor_filename = os.path.join(monitor_log_dir, f"/node{node}_{time_stamp}_{job_name}.csv")
         monitor_cmd = f"nvidia-smi --query-gpu=timestamp,name,index,pci.bus_id,utilization.gpu,utilization.memory,memory.total,memory.free,memory.used --format=csv --filename={monitor_filename} --loop-ms={monitor_period}"
         with open(f"{job_name}_logging", 'a') as fout:
             if local:
