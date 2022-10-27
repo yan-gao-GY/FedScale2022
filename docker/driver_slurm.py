@@ -6,9 +6,7 @@ import pickle
 import subprocess
 import sys
 import time
-import json
 import yaml
-import socket
 
 
 def flatten(d):
@@ -34,15 +32,6 @@ def load_yaml_conf(yaml_file):
 def process_cmd(yaml_file, local=False, node: int = 0):
 
     yaml_conf = load_yaml_conf(yaml_file)
-    ps_name = ''
-    ctnr_dict = dict()
-    ports = []
-
-    if 'use_container' in yaml_conf and yaml_conf['use_container']:
-        use_container = True
-        ports = yaml_conf['ports']
-    else:
-        use_container = False
 
     ps_ip = yaml_conf['ps_ip']
     worker_ips, total_gpus = [], []
@@ -101,11 +90,6 @@ def process_cmd(yaml_file, local=False, node: int = 0):
                 job_conf[conf_name], 'log', job_name, time_stamp)
 
     total_gpu_processes = sum([sum(x) for x in total_gpus])
-
-    # error checking
-    if use_container and total_gpu_processes + 1 != len(ports):
-        print(f'Error: there are {total_gpu_processes + 1} processes but {len(ports)} ports mapped, please check your config file')
-        exit(1)
     
     # =========== Opening the logging file ==================
     if node == 0:
@@ -129,19 +113,8 @@ def process_cmd(yaml_file, local=False, node: int = 0):
 
     # =========== Submit job to parameter server ============
     if node == 0:
-        if use_container:
-            # store ip, port of each container
-            ps_name = f"fedscale-aggr-{time_stamp}"
-            ctnr_dict[ps_name] = {
-                "type": "aggregator",
-                "ip": ps_ip,
-                "port": ports[0]
-            }
-            print(f"Starting aggregator container {ps_name} on {ps_ip}...")
-            ps_cmd = f" docker run -i --name {ps_name} --network {yaml_conf['container_network']} -p {ports[0]}:30000 --mount type=bind,source={yaml_conf['data_path']},target=/FedScale/benchmark fedscale/fedscale-aggr"
-        else:
-            print(f"Starting aggregator on {ps_ip}...")
-            ps_cmd = f" python {yaml_conf['exp_path']}/{yaml_conf['aggregator_entry']} {conf_script} --this_rank=0 --num_executors={total_gpu_processes} --executor_configs={executor_configs} --use_cuda={ps_use_cuda} --cuda_device=cuda:{ps_cuda_id} "
+        print(f"Starting aggregator on {ps_ip}...")
+        ps_cmd = f" python {yaml_conf['exp_path']}/{yaml_conf['aggregator_entry']} {conf_script} --this_rank=0 --num_executors={total_gpu_processes} --executor_configs={executor_configs} --use_cuda={ps_use_cuda} --cuda_device=cuda:{ps_cuda_id} "
 
         with open(f"{job_name}_logging", 'a') as fout:
             if local:
@@ -149,9 +122,10 @@ def process_cmd(yaml_file, local=False, node: int = 0):
             else:
                 subprocess.Popen(f'ssh {submit_user}{ps_ip} "{setup_cmd} {ps_cmd}"',
                                 shell=True, stdout=fout, stderr=fout)
-
+                
         # NOTE: probably we can set a time lower than 10 seconds
         time.sleep(5)
+        
     # =========== Submit job to each worker ============
     # This is because we need to keep track of this since it identifies workers
     rank_id = 1 if node == 0 else sum([len(listElem) for listElem in cuda_ids[:int(node)]])+1
@@ -162,21 +136,8 @@ def process_cmd(yaml_file, local=False, node: int = 0):
     print(f"Starting from rank {rank_id}")
     
     for cuda_id in gpu_ids: # loop on gpu_ids of the current ip
-        if use_container:
-            exec_name = f"fedscale-exec{rank_id}-{time_stamp}"
-            print(f'Starting executor container {exec_name} on {worker}')
-            ctnr_dict[exec_name] = {
-                "type": "executor",
-                "ip": worker,
-                "port": ports[rank_id],
-                "rank_id": rank_id,
-                "cuda_id": cuda_id
-            }
-            
-            worker_cmd = f" docker run -i --name fedscale-exec{rank_id}-{time_stamp} --network {yaml_conf['container_network']} -p {ports[rank_id]}:32000 --mount type=bind,source={yaml_conf['data_path']},target=/FedScale/benchmark fedscale/fedscale-exec"
-        else:
-            print(f"CUDA_ID for this worker in {worker} is {cuda_id}")
-            worker_cmd = f" python {yaml_conf['exp_path']}/{yaml_conf['executor_entry']} {conf_script} --this_rank={rank_id} --num_executors={total_gpu_processes} --use_cuda={w_use_cuda} --cuda_device=cuda:{cuda_id} "
+        print(f"CUDA_ID for this worker in {worker} is {cuda_id}")
+        worker_cmd = f" python {yaml_conf['exp_path']}/{yaml_conf['executor_entry']} {conf_script} --this_rank={rank_id} --num_executors={total_gpu_processes} --use_cuda={w_use_cuda} --cuda_device=cuda:{cuda_id} "
         rank_id += 1
 
         with open(f"{job_name}_logging", 'a') as fout:
@@ -186,85 +147,20 @@ def process_cmd(yaml_file, local=False, node: int = 0):
             else:
                 subprocess.Popen(f'ssh {submit_user}{worker} "{setup_cmd} {worker_cmd}"',
                                     shell=True, stdout=fout, stderr=fout)
-        # break
 
     # Dump the addresses of running workers
     if node == 0:
         current_path = os.path.dirname(os.path.abspath(__file__))
         job_name = os.path.join(current_path, job_name)
         with open(job_name, 'wb') as fout:
-            if use_container:
-                job_meta = {'user': submit_user, 'vms': running_vms, 'container_dict': ctnr_dict, 'use_container': True}
-            else:
-                job_meta = {'user': submit_user, 'vms': running_vms, 'use_container': False}
+            job_meta = {'user': submit_user, 'vms': running_vms, 'use_container': False}
             pickle.dump(job_meta, fout)
-
-    # =========== Container: initialize containers ============
-    if use_container:
-        # init aggregator
-        send_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        start_time = time.time()
-        while time.time() - start_time <= 10:
-            # avoid busy waiting
-            time.sleep(0.1)
-            try:
-                send_socket.connect((ctnr_dict[ps_name]["ip"], ctnr_dict[ps_name]["port"]))
-            except socket.error:
-                continue
-            msg = {}
-            msg["type"] = "aggr_init"
-            msg['data'] = job_conf.copy()
-            msg['data']['this_rank'] = 0
-            msg['data']['num_executors'] = total_gpu_processes
-            msg['data']['executor_configs'] = executor_configs
-            msg = json.dumps(msg)
-            send_socket.sendall(msg.encode('utf-8'))
-            send_socket.close()
-            break
-        time.sleep(10)
-        # get the assigned ip of aggregator
-        docker_cmd = f"docker network inspect {yaml_conf['container_network']}"
-        process = subprocess.Popen(f'ssh {submit_user}{ps_ip} "{docker_cmd}"',
-                                    shell=True, stdout=subprocess.PIPE)
-        output = json.loads(process.communicate()[0].decode("utf-8"))
-        ps_ip_cntr = None
-        for _, value in output[0]['Containers'].items():
-            if value['Name'] == ps_name:
-                ps_ip_cntr = value['IPv4Address'].split("/")[0]
-        if ps_ip_cntr == None:
-            print(f"Error: no aggregator container with name {ps_name} found in network {yaml_conf['container_network']}, aborting")
-            # terminiate?
-            exit(1)
-        # init all executors
-        for name, meta_dict in ctnr_dict.items():
-            if name == ps_name:
-                continue
-            send_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            start_time = time.time()
-            while time.time() - start_time <= 10:
-                # avoid busy waiting
-                time.sleep(0.1)
-                try:
-                    send_socket.connect((meta_dict["ip"], meta_dict["port"]))
-                except socket.error:
-                    continue
-                msg = {}
-                msg["type"] = "exec_init"
-                msg['data'] = job_conf.copy()
-                msg['data']['this_rank'] = meta_dict['rank_id']
-                msg['data']['num_executors'] = total_gpu_processes
-                msg['data']['cuda_device'] = f"cuda:{meta_dict['cuda_id']}"
-                msg['data']['ps_ip'] = ps_ip_cntr
-                msg = json.dumps(msg)
-                send_socket.sendall(msg.encode('utf-8'))
-                send_socket.close()
-                break                
-
-
+    
     print(f"Submitted job, please check your logs {job_conf['log_path']}/logs/{job_conf['job_name']}/{time_stamp} for status")
 
 def terminate(job_name, monitor='', local=False):
     job_meta = dict()
+    
     if job_name == "all":
         print("With parameter `all`, this can only shutdown `local` threads.")
         local = True
@@ -276,57 +172,43 @@ def terminate(job_name, monitor='', local=False):
         with open(job_meta_path, 'rb') as fin:
             job_meta = pickle.load(fin)
         print(job_meta)
+        
+    cmd_all_fedscale = f"ps -ef | grep python | grep FedScale > {os.path.expandvars('$HOME')}/fedscale_running_temp.txt"
+    cmd_job_fedscale = f"ps -ef | grep python | grep job_name={job_name} > '{os.path.expandvars('$HOME')}/fedscale_running_temp.txt'"
+    cmd_monitor = f"ps -ef | grep nvidia-smi | grep query | grep monitor >> $HOME/fedscale_running_temp.txt"
 
-    if job_meta['use_container']:
-        # TODO: adding `local` alternative
-        for name, meta_dict in job_meta['container_dict'].items():
-            print(f"Shutting down container {name} on {meta_dict['ip']}")
-            with open(f"{job_name}_logging", 'a') as fout:
-                subprocess.Popen(f'ssh {job_meta["user"]}{meta_dict["ip"]} "docker rm --force {name}"',
-                                shell=True, stdout=fout, stderr=fout)          
-    else:
-        # adding 'local' alternative, following the syntax in 'process_cmd'
-        if local:
-            print("Shutting down local threads.")
+    if local:
+        print("Shutting down local threads.")
+        with open(f"{job_name}_logging", 'a') as fout:
             if job_name == 'all':
-                cmd = (f"ps -ef | grep python | grep FedScale > {os.path.expandvars('$HOME')}/fedscale_running_temp.txt")
+                subprocess.Popen([cmd_all_fedscale], shell=True, stdout=fout, stderr=fout)
             else:
-                cmd = (f"ps -ef | grep python | grep job_name={job_name} > '{os.path.expandvars('$HOME')}/fedscale_running_temp.txt'")
-            print(f'"{cmd}"')
-            subprocess.Popen([cmd],shell=True)
+                subprocess.Popen([cmd_job_fedscale], shell=True, stdout=fout, stderr=fout)
             # NOTE: probably not needed
             time.sleep(1)
             # added for monitor
             if monitor == 'monitor':
-                cmd = (f"ps -ef | grep nvidia-smi | grep query | grep monitor >> $HOME/fedscale_running_temp.txt")
-                print(f'"{cmd}"')
-                subprocess.Popen([cmd],shell=True)
+                subprocess.Popen([cmd_monitor], shell=True, stdout=fout, stderr=fout)
             # NOTE: probably not needed
             time.sleep(1)
-            [subprocess.Popen([f'kill -9 {str(l.split()[1])} 1>/dev/null 2>&1'], shell=True) for l in open(os.path.join(os.getenv("HOME", ""), "fedscale_running_temp.txt")).readlines()]
-            subprocess.Popen(["rm $HOME/fedscale_running_temp.txt"], shell=True)
-        else:
-            print("Shutting down non-local threads.")
-            for vm_ip in job_meta['vms']:
-                print(f"Shutting down job on {vm_ip}")
-                with open(f"{job_name}_logging", 'a') as fout:
-                    cmd = ''
-                    if job_name == 'all':
-                        cmd += ("ps -ef | grep python | grep FedScale > '$FEDSCALE_HOME/fedscale_running_temp.txt'")
-                    else:
-                        cmd += (f"ps -ef | grep python | grep job_name={job_name} > '$FEDSCALE_HOME/fedscale_running_temp.txt'")
-                    print(f'ssh {job_meta["user"]}{vm_ip} "{cmd} && exit"')
-                    os.system(f'ssh {job_meta["user"]}{vm_ip} "{cmd} && exit"')
-                    time.sleep(1)
-                    cmd = ''
-                    # added for monitor
-                    if monitor == 'monitor':
-                        cmd += (f"ps -ef | grep nvidia-smi | grep query | grep monitor >> '$FEDSCALE_HOME/fedscale_running_temp.txt'")
-                    print(f'ssh {job_meta["user"]}{vm_ip} "{cmd} && exit"')
-                    os.system(f'ssh {job_meta["user"]}{vm_ip} "{cmd} && exit"')
-                    time.sleep(1)
-                    [os.system(f'ssh {job_meta["user"]}{vm_ip} "kill -9 {str(l.split()[1])} 1>/dev/null 2>&1"') for l in open(os.path.join(os.getenv("FEDSCALE_HOME", ""), "fedscale_running_temp.txt")).readlines()]
-                    os.system(f'ssh {job_meta["user"]}{vm_ip} "rm $FEDSCALE_HOME/fedscale_running_temp.txt"')
+            [subprocess.Popen([f'kill -9 {str(l.split()[1])} 1>/dev/null 2>&1'], shell=True, stdout=fout, stderr=fout) for l in open(os.path.join(os.getenv("HOME", ""), "fedscale_running_temp.txt")).readlines()]
+            subprocess.Popen(["rm $HOME/fedscale_running_temp.txt"], shell=True, stdout=fout, stderr=fout)
+    else:
+        # TODO: put subprocess.Popen her also
+        # print("Shutting down non-local threads.")
+        # with open(f"{job_name}_logging", 'a') as fout:
+        #     for vm_ip in job_meta['vms']:
+        #         print(f"Shutting down job on {vm_ip}")
+        #         if job_name == 'all':
+        #             subprocess.Popen([f'ssh {job_meta["user"]}{vm_ip} "{cmd_all_fedscale}"'], shell=True, stdin=fout, stdout=fout)
+        #         else:
+        #             subprocess.Popen([f'ssh {job_meta['user']}{vm_ip} "{cmd_job_fedscale}"'], shell=True, stdin=fout, stdout=fout)
+        #         # added for monitor
+        #         if monitor == 'monitor':
+        #             subprocess.Popen([f'ssh {job_meta['user']}{vm_ip} "{cmd_monitor}"'], shell=True, stdin=fout, stdout=fout)
+        #         time.sleep(1)
+        #         [subprocess.Popen([f'ssh {job_meta['user']}{vm_ip} "kill -9 {str(l.split()[1])} 1>/dev/null 2>&1"'], shell=True, stdin=fout, stdout=fout) for l in open(os.path.join(os.getenv('HOME', ''), 'fedscale_running_temp.txt')).readlines()]
+        #         subprocess.Popen([f'ssh {job_meta['user']}{vm_ip} "rm $HOME/fedscale_running_temp.txt"'], shell=True, stdin=fout, stdout=fout)
 
 print_help: bool = False
 if len(sys.argv) > 1:
