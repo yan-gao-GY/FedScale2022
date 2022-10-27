@@ -51,6 +51,9 @@ class Client(object):
         # use `while self.completed_steps < conf.local_steps * len(client_data)` instead
         while self.completed_steps < conf.local_steps:
             try:
+                # TODO: fix the issue about slow training of not-enough-samples clients
+                # if len(client_data.dataset) < 20:
+                #     raise Exception(f"Client ({clientId}) has not enough samples, it has {len(client_data.dataset)} samples") 
                 self.train_step(client_data, conf, model, optimizer, criterion)
             except Exception as ex:
                 error_type = ex
@@ -128,7 +131,8 @@ class Client(object):
             if conf.task == 'nlp':
                 (data, _) = data_pair
                 data, target = mask_tokens(
-                    data, conf.tokenizer, conf, device=conf.device)
+                    # FIXME: change `tokenizer` to `conf.tokenizer`
+                    data, tokenizer, conf, device=conf.device)
             elif conf.task == 'voice':
                 (data, target, input_percentages,
                     target_sizes), _ = data_pair
