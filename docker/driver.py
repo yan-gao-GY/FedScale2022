@@ -76,6 +76,7 @@ def process_cmd(yaml_file, local=False, node: int = 0):
     running_vms = set()
     running_vms.add(ps_ip)
     [running_vms.add(worker) for worker in worker_ips]
+    running_vms = list(running_vms)
     
     job_name = 'fedscale_job'
     log_path = './logs'
@@ -155,7 +156,7 @@ def process_cmd(yaml_file, local=False, node: int = 0):
                                 shell=True, stdout=fout, stderr=fout)
 
         # NOTE: probably we can set a time lower than 10 seconds
-        time.sleep(10)
+        time.sleep(5)
     # =========== Submit job to each worker ============
     # This is because we need to keep track of this since it identifies workers
     rank_id = 1 if node == 0 else sum([len(listElem) for listElem in cuda_ids[:int(node)]])+1
@@ -186,7 +187,7 @@ def process_cmd(yaml_file, local=False, node: int = 0):
         rank_id += 1
 
         with open(f"{job_name}_logging", 'a') as fout:
-            time.sleep(2)
+            # time.sleep(2)
             if local:
                 subprocess.Popen(f'{worker_cmd}',
                                     shell=True, stdout=fout, stderr=fout)
@@ -295,9 +296,9 @@ def terminate(job_name, monitor='', local=False):
         if local:
             cmd = ""
             if job_name == 'all':
-                cmd += (f"ps -ef | grep python | grep FedScale > {os.path.expandvars('$FEDSCALE_HOME')}/fedscale_running_temp.txt")
+                cmd += (f"ps -ef | grep python | grep FedScale > {os.path.expandvars('$HOME')}/fedscale_running_temp.txt")
             else:
-                cmd += (f"ps -ef | grep python | grep job_name={job_name} > '{os.path.expandvars('$FEDSCALE_HOME')}/fedscale_running_temp.txt'")
+                cmd += (f"ps -ef | grep python | grep job_name={job_name} > '{os.path.expandvars('$HOME')}/fedscale_running_temp.txt'")
             print(f'"{cmd}"')
             subprocess.Popen([cmd],shell=True)
             # NOTE: probably not needed
@@ -305,13 +306,13 @@ def terminate(job_name, monitor='', local=False):
             cmd = ""
             # added for monitor
             if monitor == 'monitor':
-                cmd += (f"ps -ef | grep nvidia-smi | grep query | grep {job_name} >> $FEDSCALE_HOME/fedscale_running_temp.txt")
+                cmd += (f"ps -ef | grep nvidia-smi | grep query | grep {job_name} >> $HOME/fedscale_running_temp.txt")
                 print(f'"{cmd}"')
                 subprocess.Popen([cmd],shell=True)
             # NOTE: probably not needed
             time.sleep(1)
-            [subprocess.Popen([f'kill -9 {str(l.split()[1])} 1>/dev/null 2>&1'], shell=True) for l in open(os.path.join(os.getenv("FEDSCALE_HOME", ""), "fedscale_running_temp.txt")).readlines()]
-            subprocess.Popen(["rm $FEDSCALE_HOME/fedscale_running_temp.txt"], shell=True)
+            [subprocess.Popen([f'kill -9 {str(l.split()[1])} 1>/dev/null 2>&1'], shell=True) for l in open(os.path.join(os.getenv("HOME", ""), "fedscale_running_temp.txt")).readlines()]
+            subprocess.Popen(["rm $HOME/fedscale_running_temp.txt"], shell=True)
         else:
             for vm_ip in job_meta['vms']:
                 print(f"Shutting down job on {vm_ip}")
